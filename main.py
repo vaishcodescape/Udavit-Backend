@@ -1,4 +1,4 @@
-#Udavit Fast-API 
+# Udavit Fast-API 
 import io
 import os
 import json
@@ -12,7 +12,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore, auth
 from dotenv import load_dotenv
 
-# Load environment variables
+# Load environment variables from .env file
 load_dotenv()
 
 # ------------------------
@@ -26,21 +26,27 @@ security = HTTPBearer()
 try:
     generator = pipeline("text-generation", model="sshleifer/tiny-gpt2", device=-1)
 except Exception as e:
-    print(f"Warning: Could not load text generation model: {e}")
+    print(f"⚠️ Warning: Could not load text generation model: {e}")
     generator = None
 
 # ------------------------
 # Firebase setup
 # ------------------------
 try:
-    # Check if Firebase environment variables are set
-    if all([
-        os.getenv("FIREBASE_TYPE"),
-        os.getenv("FIREBASE_PROJECT_ID"),
-        os.getenv("FIREBASE_PRIVATE_KEY"),
-        os.getenv("FIREBASE_CLIENT_EMAIL")
-    ]):
-        # Create credentials from environment variables
+    required_vars = [
+        "FIREBASE_TYPE",
+        "FIREBASE_PROJECT_ID",
+        "FIREBASE_PRIVATE_KEY_ID",
+        "FIREBASE_PRIVATE_KEY",
+        "FIREBASE_CLIENT_EMAIL",
+        "FIREBASE_CLIENT_ID",
+        "FIREBASE_AUTH_URI",
+        "FIREBASE_TOKEN_URI",
+        "FIREBASE_AUTH_PROVIDER_X509_CERT_URL",
+        "FIREBASE_CLIENT_X509_CERT_URL"
+    ]
+
+    if all(os.getenv(var) for var in required_vars):
         cred_dict = {
             "type": os.getenv("FIREBASE_TYPE"),
             "project_id": os.getenv("FIREBASE_PROJECT_ID"),
@@ -52,24 +58,23 @@ try:
             "token_uri": os.getenv("FIREBASE_TOKEN_URI"),
             "auth_provider_x509_cert_url": os.getenv("FIREBASE_AUTH_PROVIDER_X509_CERT_URL"),
             "client_x509_cert_url": os.getenv("FIREBASE_CLIENT_X509_CERT_URL"),
-            "universe_domain": os.getenv("FIREBASE_UNIVERSE_DOMAIN")
         }
-        
+
         cred = credentials.Certificate(cred_dict)
         firebase_admin.initialize_app(cred)
         db = firestore.client()
         projects_collection = db.collection("projects")
         users_collection = db.collection("users")
         firebase_available = True
-        print("Firebase initialized successfully from environment variables")
+        print("✅ Firebase initialized successfully from environment variables")
     else:
-        print("Warning: Firebase environment variables not found. Firebase features will be disabled.")
+        print("⚠️ Firebase environment variables not found. Firebase features will be disabled.")
         firebase_available = False
         db = None
         projects_collection = None
         users_collection = None
 except Exception as e:
-    print(f"Warning: Firebase initialization failed: {e}")
+    print(f"❌ Firebase initialization failed: {e}")
     firebase_available = False
     db = None
     projects_collection = None
@@ -167,7 +172,7 @@ def compute_h2_score(h2_produced: float, max_h2: float = 100.0) -> float:
     return round(min(h2_produced / max_h2, 1.0), 3)
 
 def combine_scores(auth_conf: float, h2_score: float, weights=(0.6, 0.4)) -> float:
-    return round((auth_conf*weights[0] + h2_score*weights[1])*10, 3)
+    return round((auth_conf * weights[0] + h2_score * weights[1]) * 10, 3)
 
 def llama_verify_text(text: str) -> Dict[str, Any]:
     if generator is None:
@@ -184,7 +189,7 @@ def llama_verify_text(text: str) -> Dict[str, Any]:
         end = content.rfind("}") + 1
         result_json = content[start:end] if start != -1 and end != -1 else '{}'
         result = json.loads(result_json)
-        return {"confidence": float(result.get("confidence", 0.5)), "reason": result.get("reason","")}
+        return {"confidence": float(result.get("confidence", 0.5)), "reason": result.get("reason", "")}
     except Exception as e:
         return {"confidence": 0.5, "reason": f"Text check failed: {e}"}
 
