@@ -1,5 +1,7 @@
+#Udavit Fast-API 
 import io
 import json
+import os
 from typing import Dict, Any
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from pydantic import BaseModel
@@ -11,15 +13,32 @@ from firebase_admin import credentials, firestore
 # ------------------------
 # Hugging Face text-generation pipeline
 # ------------------------
-generator = pipeline("text-generation", model="sshleifer/tiny-gpt2", device=-1)
+try:
+    generator = pipeline("text-generation", model="sshleifer/tiny-gpt2", device=-1)
+except Exception as e:
+    print(f"Warning: Could not load text generation model: {e}")
+    generator = None
 
 # ------------------------
 # Firebase setup
 # ------------------------
-cred = credentials.Certificate("firebase_key.json")
-firebase_admin.initialize_app(cred)
-db = firestore.client()
-projects_collection = db.collection("projects")
+try:
+    if os.path.exists("firebase_key.json"):
+        cred = credentials.Certificate("firebase_key.json")
+        firebase_admin.initialize_app(cred)
+        db = firestore.client()
+        projects_collection = db.collection("projects")
+        firebase_available = True
+    else:
+        print("Warning: firebase_key.json not found. Firebase features will be disabled.")
+        firebase_available = False
+        db = None
+        projects_collection = None
+except Exception as e:
+    print(f"Warning: Firebase initialization failed: {e}")
+    firebase_available = False
+    db = None
+    projects_collection = None
 
 # ------------------------
 # FastAPI app
@@ -49,6 +68,9 @@ def combine_scores(auth_conf: float, h2_score: float, weights=(0.6, 0.4)) -> flo
     return round((auth_conf*weights[0] + h2_score*weights[1])*10, 3)
 
 def llama_verify_text(text: str) -> Dict[str, Any]:
+    if generator is None:
+        return {"confidence": 0.5, "reason": "Text generation model not available"}
+    
     prompt = (
         f"Assess the authenticity of this project:\n{text}\n"
         "Respond with JSON: {\"confidence\": 0..1, \"reason\": \"short explanation\"}"
@@ -80,6 +102,9 @@ async def submit_project(
     h2_produced: float = Form(...),
     file: UploadFile = File(...)
 ):
+    if not firebase_available:
+        raise HTTPException(status_code=503, detail="Firebase service unavailable")
+    
     existing = projects_collection.document(project_id).get()
     if existing.exists:
         data = existing.to_dict()
@@ -141,6 +166,21 @@ async def submit_project(
 
 @app.get("/submissions")
 async def list_submissions():
+    if not firebase_available:
+        raise HTTPException(status_code=503, detail="Firebase service unavailable")
+    
     docs = projects_collection.stream()
     submissions = [doc.to_dict() for doc in docs]
     return {"count": len(submissions), "submissions": submissions}
+
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "firebase_available": firebase_available,
+        "text_model_available": generator is not None
+    }
+
+@app.get("/")
+async def root():
+    return {"message": "LLaMA Project Scoring API", "version": "1.0"}

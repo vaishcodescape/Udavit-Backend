@@ -1,0 +1,14 @@
+{
+    "type": "service_account",
+    "project_id": "udavitstorage",
+    "private_key_id": "fe93ef8aee3634fc99039653d512aa97eb4484ed",
+    "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCer8jQKhMrfrZq\nHJGUmncKTIGrTr0/uUzgjtoMdRA91iIo/XFAYouNFqT5VySsZE6o9CLQGxKhgBr0\nqwF+rQn9W9p/7nwWhQ78tHEr+JinMf1UcJ3IzpiW8NXLIGdNpu9nllpWraGX4dGw\nolCjFL03hbXBaALVzW9VhbFkp8l/vLS5Lx79LxXJa2z4XMDjZ0r1vY4hYne41wUO\nZWfH10lkRkzNILNlRbAganw+/k+gIZ0lcJl8ScYqwsY5shKTyOr6CKEJYd25il7D\nlpgyj57qQw5zgPs/+UsJ3CMbJGEfsJ21iLLtVViGMfsDwIDj/QRCi/eF6ntZxCS5\nz7JUUMKbAgMBAAECggEAPW55xDR1pWHxhlS2+xttOBx0GnhqBTBcFZbXzPjIp9es\n88dhv3Ym5iC9DxXwSZivZvLUQ1InvUPVq6BD/OFKO74CcYJGoYUzTxsfsNEVb6yH\nkNfkDWgFZHGponBR7ZrRlX18TY/8PcsbHVFI/Ek8EzF9Mnlsl45nKmmOShQ2im9L\nuVVpSnne1pnPN2NshXiUDlMlSsDJX47OlvDBiheAEBI9L/iRkiYxYk9/nrV6I9gh\n6H8joAzZd3AuNZ6SqfmhuqWwJamuDlqoSj9z5RUE/U39FdYt2rfW7RfAicYiX+II\naeRRQSP15G6nPMJUbKsTdte99K1iJLFFh8XEauz4QQKBgQDbqYRQUhUpxHgXVTEh\nd6RTyMyq+3McFMG03IpAnLXpW7r30bSS1WAmM7rZqnLI8qn3/wvfKMIL32GiYU8I\nMerSY47C4YKFAER/UJrBA0ojW4mjFX4ovq23ao/GbkOELNPzu5hzFmKt5I+dgkgW\nCrkDoxLgXMoedbAM24jPCflH+wKBgQC48ANAkYAp09hDomWnGcb3TsWF8go8tfiy\nH48WeHteXNr98QBof5fZNXAjRPO6z4ys+9elA4UMb7U8Xdpa4w9uKRVUnKOBC0eF\nairerSNgeNQibS8huYgFWassf8SjnZrxb7HMnUUSx3JwmjnlcgRcoHMee2D4/IsO\nHuHAUhZN4QKBgDP4zbd7VEqHk6phm7hBaH3yWopx5/BS8Onr7EIRUfEepQQRd9nt\n5kvjnWf2riXhVFm63II2UIMinSUgROS5esfAinyNgqYZRBujZJoaPyZSeCQ/55OY\nWd21tsLKP+s7+AII9q70MvDVzS0FMC0W6GN15/dxvNisG7VPE/V4dKSVAoGAQfBZ\nyIDYaJF/D4ZspirbtTvh04NcQQ9E0AXOl913Z0rGTjrKwXeU5b5W8ExadqYf62GU\nHuLlYmzF+vMfsr44tzdwwo1jAtTJuHkFNgYXkgMi5+90GZs0M2woSyJ3Mzszjpgb\nlfARO8PfOuTSdcu0YG5Y/WpSRhSNZAiAx3i9OSECgYEAxTMN8yy0MNWVSpIYuama\nTM9mMx53rtG5ezE1rJlxvhgNAb6BO8ocS/uosjVBcdQFerE2q+PgR6uLI8Z87R3+\nxPylKXZR0RworSF+PCWrbnAVk17/m8zvrrlrCO52pFc+lNGQnjvFUebtmytTrshX\nQvkQ4sgQEkhLuxbeluC4Prw=\n-----END PRIVATE KEY-----\n",
+    "client_email": "firebase-adminsdk-fbsvc@udavitstorage.iam.gserviceaccount.com",
+    "client_id": "110547175305653943419",
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+    "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40udavitstorage.iam.gserviceaccount.com",
+    "universe_domain": "googleapis.com"
+  }
+  
