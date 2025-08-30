@@ -201,6 +201,20 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+# Configuration files (JSON)
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!jsconfig.json
+!composer.json
+!composer.lock
+!pyproject.toml
+!poetry.lock
+!uv.lock
+!pdm.lock
+!pixi.lock
+
 # Marimo
 marimo/_static/
 marimo/_lsp/
