@@ -100,7 +100,9 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     display_name: str
-    company: Optional[str] = None
+    chemical_industry_role: str
+    hydrogen: str
+    chemical_company: str
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -110,7 +112,9 @@ class UserResponse(BaseModel):
     uid: str
     email: str
     display_name: str
-    company: Optional[str] = None
+    chemical_industry_role: str
+    hydrogen: str
+    chemical_company: str
     email_verified: bool
     created_at: str
 
@@ -220,7 +224,9 @@ async def register_user(user_data: UserCreate):
         user_doc_data = {
             "email": user_data.email,
             "display_name": user_data.display_name,
-            "company": user_data.company,
+            "chemical_industry_role": user_data.chemical_industry_role,
+            "hydrogen": user_data.hydrogen,
+            "chemical_company": user_data.chemical_company,
             "email_verified": user_record.email_verified,
             "created_at": user_record.user_metadata.creation_timestamp.isoformat() if user_record.user_metadata.creation_timestamp else None
         }
@@ -236,7 +242,9 @@ async def register_user(user_data: UserCreate):
                 uid=user_record.uid,
                 email=user_record.email,
                 display_name=user_record.display_name,
-                company=user_data.company,
+                chemical_industry_role=user_data.chemical_industry_role,
+                hydrogen=user_data.hydrogen,
+                chemical_company=user_data.chemical_company,
                 email_verified=user_record.email_verified,
                 created_at=user_doc_data["created_at"] or ""
             ),
@@ -284,7 +292,9 @@ async def login_user(login_data: UserLogin):
                 uid=user_record.uid,
                 email=user_record.email,
                 display_name=user_data.get("display_name", ""),
-                company=user_data.get("company"),
+                chemical_industry_role=user_data.get("chemical_industry_role", ""),
+                hydrogen=user_data.get("hydrogen", ""),
+                chemical_company=user_data.get("chemical_company", ""),
                 email_verified=user_record.email_verified,
                 created_at=user_data.get("created_at", "")
             ),
@@ -338,7 +348,9 @@ async def get_user_profile(current_user: Dict[str, Any] = Depends(get_current_us
         uid=current_user["uid"],
         email=current_user["email"],
         display_name=current_user["display_name"],
-        company=current_user.get("company"),
+        chemical_industry_role=current_user.get("chemical_industry_role", ""),
+        hydrogen=current_user.get("hydrogen", ""),
+        chemical_company=current_user.get("chemical_company", ""),
         email_verified=current_user.get("email_verified", False),
         created_at=current_user.get("created_at", "")
     )
@@ -346,7 +358,9 @@ async def get_user_profile(current_user: Dict[str, Any] = Depends(get_current_us
 @app.put("/auth/profile")
 async def update_user_profile(
     display_name: Optional[str] = Form(None),
-    company: Optional[str] = Form(None),
+    chemical_industry_role: Optional[str] = Form(None),
+    hydrogen: Optional[str] = Form(None),
+    chemical_company: Optional[str] = Form(None),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     if not firebase_available:
@@ -359,8 +373,12 @@ async def update_user_profile(
         update_data = {}
         if display_name is not None:
             update_data["display_name"] = display_name
-        if company is not None:
-            update_data["company"] = company
+        if chemical_industry_role is not None:
+            update_data["chemical_industry_role"] = chemical_industry_role
+        if hydrogen is not None:
+            update_data["hydrogen"] = hydrogen
+        if chemical_company is not None:
+            update_data["chemical_company"] = chemical_company
         
         if update_data:
             # Update in Firestore
