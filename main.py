@@ -1,17 +1,24 @@
 #Udavit Fast-API 
 import io
 import os
-from typing import Dict, Any
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException
-from pydantic import BaseModel
+import json
+from typing import Dict, Any, Optional
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Depends, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pydantic import BaseModel, EmailStr
 from PIL import Image
 from transformers import pipeline
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials, firestore, auth
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
+
+# ------------------------
+# Security
+# ------------------------
+security = HTTPBearer()
 
 # ------------------------
 # Hugging Face text-generation pipeline
@@ -52,6 +59,7 @@ try:
         firebase_admin.initialize_app(cred)
         db = firestore.client()
         projects_collection = db.collection("projects")
+        users_collection = db.collection("users")
         firebase_available = True
         print("Firebase initialized successfully from environment variables")
     else:
@@ -59,11 +67,13 @@ try:
         firebase_available = False
         db = None
         projects_collection = None
+        users_collection = None
 except Exception as e:
     print(f"Warning: Firebase initialization failed: {e}")
     firebase_available = False
     db = None
     projects_collection = None
+    users_collection = None
 
 # ------------------------
 # FastAPI app
@@ -71,7 +81,7 @@ except Exception as e:
 app = FastAPI(title="LLaMA Project Scoring API", version="1.0")
 
 # ------------------------
-# Response model
+# Response models
 # ------------------------
 class ScoreOutput(BaseModel):
     project_id: str
@@ -80,6 +90,73 @@ class ScoreOutput(BaseModel):
     final_score: float
     status: str
     explanation: Dict[str, Any]
+
+class UserCreate(BaseModel):
+    email: EmailStr
+    password: str
+    display_name: str
+    company: Optional[str] = None
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+class UserResponse(BaseModel):
+    uid: str
+    email: str
+    display_name: str
+    company: Optional[str] = None
+    email_verified: bool
+    created_at: str
+
+class AuthResponse(BaseModel):
+    user: UserResponse
+    token: str
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+class PasswordResetConfirm(BaseModel):
+    oob_code: str
+    new_password: str
+
+# ------------------------
+# Authentication middleware
+# ------------------------
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict[str, Any]:
+    if not firebase_available:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Firebase service unavailable"
+        )
+    
+    try:
+        # Verify the Firebase ID token
+        decoded_token = auth.verify_id_token(credentials.credentials)
+        uid = decoded_token['uid']
+        
+        # Get user data from Firestore
+        user_doc = users_collection.document(uid).get()
+        if not user_doc.exists:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        user_data = user_doc.to_dict()
+        user_data['uid'] = uid
+        return user_data
+        
+    except auth.InvalidIdTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication token"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Authentication failed: {str(e)}"
+        )
 
 # ------------------------
 # Helper functions
@@ -116,7 +193,214 @@ def verify_image(img: Image.Image) -> Dict[str, Any]:
     return {"confidence": 0.6, "reason": "Placeholder image verification", "size": [w, h]}
 
 # ------------------------
-# Endpoints
+# Authentication endpoints
+# ------------------------
+@app.post("/auth/register", response_model=AuthResponse)
+async def register_user(user_data: UserCreate):
+    if not firebase_available:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Firebase service unavailable"
+        )
+    
+    try:
+        # Create user in Firebase Auth
+        user_record = auth.create_user(
+            email=user_data.email,
+            password=user_data.password,
+            display_name=user_data.display_name
+        )
+        
+        # Store additional user data in Firestore
+        user_doc_data = {
+            "email": user_data.email,
+            "display_name": user_data.display_name,
+            "company": user_data.company,
+            "email_verified": user_record.email_verified,
+            "created_at": user_record.user_metadata.creation_timestamp.isoformat() if user_record.user_metadata.creation_timestamp else None
+        }
+        
+        users_collection.document(user_record.uid).set(user_doc_data)
+        
+        # Generate custom token for immediate login
+        custom_token = auth.create_custom_token(user_record.uid)
+        
+        # Return user data and token
+        return AuthResponse(
+            user=UserResponse(
+                uid=user_record.uid,
+                email=user_record.email,
+                display_name=user_record.display_name,
+                company=user_data.company,
+                email_verified=user_record.email_verified,
+                created_at=user_doc_data["created_at"] or ""
+            ),
+            token=custom_token.decode()
+        )
+        
+    except auth.EmailAlreadyExistsError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User with this email already exists"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Registration failed: {str(e)}"
+        )
+
+@app.post("/auth/login", response_model=AuthResponse)
+async def login_user(login_data: UserLogin):
+    if not firebase_available:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Firebase service unavailable"
+        )
+    
+    try:
+        # Get user by email
+        user_record = auth.get_user_by_email(login_data.email)
+        
+        # Get user data from Firestore
+        user_doc = users_collection.document(user_record.uid).get()
+        if not user_doc.exists:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        user_data = user_doc.to_dict()
+        
+        # Generate custom token
+        custom_token = auth.create_custom_token(user_record.uid)
+        
+        return AuthResponse(
+            user=UserResponse(
+                uid=user_record.uid,
+                email=user_record.email,
+                display_name=user_data.get("display_name", ""),
+                company=user_data.get("company"),
+                email_verified=user_record.email_verified,
+                created_at=user_data.get("created_at", "")
+            ),
+            token=custom_token.decode()
+        )
+        
+    except auth.UserNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Login failed: {str(e)}"
+        )
+
+@app.post("/auth/password-reset")
+async def request_password_reset(reset_request: PasswordResetRequest):
+    if not firebase_available:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Firebase service unavailable"
+        )
+    
+    try:
+        # Generate password reset link
+        reset_link = auth.generate_password_reset_link(reset_request.email)
+        
+        # In a real application, you would send this link via email
+        # For now, we'll return it in the response
+        return {
+            "message": "Password reset link generated successfully",
+            "reset_link": reset_link
+        }
+        
+    except auth.UserNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Password reset request failed: {str(e)}"
+        )
+
+@app.get("/auth/profile", response_model=UserResponse)
+async def get_user_profile(current_user: Dict[str, Any] = Depends(get_current_user)):
+    return UserResponse(
+        uid=current_user["uid"],
+        email=current_user["email"],
+        display_name=current_user["display_name"],
+        company=current_user.get("company"),
+        email_verified=current_user.get("email_verified", False),
+        created_at=current_user.get("created_at", "")
+    )
+
+@app.put("/auth/profile")
+async def update_user_profile(
+    display_name: Optional[str] = Form(None),
+    company: Optional[str] = Form(None),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    if not firebase_available:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Firebase service unavailable"
+        )
+    
+    try:
+        update_data = {}
+        if display_name is not None:
+            update_data["display_name"] = display_name
+        if company is not None:
+            update_data["company"] = company
+        
+        if update_data:
+            # Update in Firestore
+            users_collection.document(current_user["uid"]).update(update_data)
+            
+            # Update display name in Firebase Auth if provided
+            if display_name is not None:
+                auth.update_user(
+                    current_user["uid"],
+                    display_name=display_name
+                )
+        
+        return {"message": "Profile updated successfully"}
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Profile update failed: {str(e)}"
+        )
+
+@app.delete("/auth/account")
+async def delete_user_account(current_user: Dict[str, Any] = Depends(get_current_user)):
+    if not firebase_available:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Firebase service unavailable"
+        )
+    
+    try:
+        # Delete user data from Firestore
+        users_collection.document(current_user["uid"]).delete()
+        
+        # Delete user from Firebase Auth
+        auth.delete_user(current_user["uid"])
+        
+        return {"message": "Account deleted successfully"}
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Account deletion failed: {str(e)}"
+        )
+
+# ------------------------
+# Protected endpoints (require authentication)
 # ------------------------
 @app.post("/submit", response_model=ScoreOutput)
 async def submit_project(
@@ -125,7 +409,8 @@ async def submit_project(
     phase: str = Form(...),
     text: str = Form(...),
     h2_produced: float = Form(...),
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     if not firebase_available:
         raise HTTPException(status_code=503, detail="Firebase service unavailable")
@@ -169,7 +454,9 @@ async def submit_project(
         "authenticity_confidence": authenticity_conf,
         "h2_score": h2_score,
         "final_score": final_score,
-        "status": status
+        "status": status,
+        "user_id": current_user["uid"],
+        "submitted_at": firestore.SERVER_TIMESTAMP
     })
 
     explanation = {
@@ -190,11 +477,12 @@ async def submit_project(
     )
 
 @app.get("/submissions")
-async def list_submissions():
+async def list_submissions(current_user: Dict[str, Any] = Depends(get_current_user)):
     if not firebase_available:
         raise HTTPException(status_code=503, detail="Firebase service unavailable")
     
-    docs = projects_collection.stream()
+    # Only show user's own submissions
+    docs = projects_collection.where("user_id", "==", current_user["uid"]).stream()
     submissions = [doc.to_dict() for doc in docs]
     return {"count": len(submissions), "submissions": submissions}
 
